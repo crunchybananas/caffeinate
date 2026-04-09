@@ -120,8 +120,7 @@ module Caffeinate
 
     # Override Caffeinate's deliver_later! to support an optional delay.
     # When delay is provided, uses Sidekiq's perform_in to schedule delivery
-    # after the specified number of seconds, avoiding race conditions where
-    # dependent records may not yet be committed.
+    # after the specified number of seconds.
     #
     # @param delay [Integer, nil] seconds to wait before delivering (default: immediate)
     def deliver_later!(delay: nil)

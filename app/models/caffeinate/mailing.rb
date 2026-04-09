@@ -122,12 +122,12 @@ module Caffeinate
     # When delay is provided, uses Sidekiq's perform_in to schedule delivery
     # after the specified number of seconds.
     #
-    # @param delay [Integer, nil] seconds to wait before delivering (default: immediate)
-    def deliver_later!(delay: nil)
+    # @param delay_in_seconds [Integer, nil] seconds to wait before delivering (default: immediate)
+    def deliver_later!(delay_in_seconds: nil)
       klass = ::Caffeinate.config.async_delivery_class
 
-      if delay.present? && delay.positive? && klass.respond_to?(:perform_in)
-        klass.perform_in(delay, id)
+      if delay_in_seconds.present? && delay_in_seconds.positive? && klass.respond_to?(:perform_in)
+        klass.perform_in(delay_in_seconds, id)
       elsif klass.respond_to?(:perform_later)
         klass.perform_later(id)
       elsif klass.respond_to?(:perform_async)

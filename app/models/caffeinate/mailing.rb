@@ -118,15 +118,23 @@ module Caffeinate
       caffeinate_campaign_subscription.deliver!(self)
     end
 
-    # Delivers the Mailing in the background
-    def deliver_later!
+    # Override Caffeinate's deliver_later! to support an optional delay.
+    # When delay is provided, uses Sidekiq's perform_in to schedule delivery
+    # after the specified number of seconds, avoiding race conditions where
+    # dependent records may not yet be committed.
+    #
+    # @param delay [Integer, nil] seconds to wait before delivering (default: immediate)
+    def deliver_later!(delay: nil)
       klass = ::Caffeinate.config.async_delivery_class
-      if klass.respond_to?(:perform_later)
+
+      if delay.present? && delay.positive? && klass.respond_to?(:perform_in)
+        klass.perform_in(delay, id)
+      elsif klass.respond_to?(:perform_later)
         klass.perform_later(id)
       elsif klass.respond_to?(:perform_async)
         klass.perform_async(id)
       else
-        raise NoMethodError, "Neither perform_later or perform_async are defined on #{klass}."
+        raise NoMethodError, "Neither perform_later, perform_async, or perform_in are defined on #{klass}."
       end
     end
 

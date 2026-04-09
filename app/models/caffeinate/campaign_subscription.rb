@@ -39,7 +39,6 @@ module Caffeinate
 
     belongs_to :caffeinate_campaign, class_name: 'Caffeinate::Campaign', foreign_key: :caffeinate_campaign_id
     alias_method :campaign, :caffeinate_campaign
-
     belongs_to :subscriber, polymorphic: true
     belongs_to :user, polymorphic: true, optional: true
 

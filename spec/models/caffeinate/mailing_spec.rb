@@ -194,6 +194,62 @@ describe ::Caffeinate::Mailing do
         mailing.deliver_later!
       end
     end
+
+    context 'with an async_delivery_queue_resolver' do
+      class FakeQueueableDelivery
+        def self.set(_options); end
+        def self.perform_async(_id); end
+        def self.perform_in(_delay, _id); end
+      end
+
+      before do
+        ::Caffeinate.config.async_delivery_class = 'FakeQueueableDelivery'
+      end
+
+      after do
+        ::Caffeinate.config.async_delivery_class = nil
+        ::Caffeinate.config.async_delivery_queue_resolver = nil
+      end
+
+      let(:mailing) { unsent_mailings.first }
+
+      it 'passes the mailing to the resolver' do
+        received = nil
+        ::Caffeinate.config.async_delivery_queue_resolver = ->(m) { received = m; nil }
+        mailing.deliver_later!
+        expect(received).to eq(mailing)
+      end
+
+      context 'when the resolver returns a queue' do
+        before do
+          ::Caffeinate.config.async_delivery_queue_resolver = ->(_m) { 'critical' }
+        end
+
+        it 'enqueues on the resolved queue' do
+          expect(FakeQueueableDelivery).to receive(:set).with(queue: 'critical').and_return(FakeQueueableDelivery)
+          expect(FakeQueueableDelivery).to receive(:perform_async).with(mailing.id)
+          mailing.deliver_later!
+        end
+
+        it 'honors the resolved queue on the delayed path' do
+          expect(FakeQueueableDelivery).to receive(:set).with(queue: 'critical').and_return(FakeQueueableDelivery)
+          expect(FakeQueueableDelivery).to receive(:perform_in).with(60, mailing.id)
+          mailing.deliver_later!(delay_in_seconds: 60)
+        end
+      end
+
+      context 'when the resolver returns a blank value' do
+        before do
+          ::Caffeinate.config.async_delivery_queue_resolver = ->(_m) { nil }
+        end
+
+        it 'does not set a queue and uses the default' do
+          expect(FakeQueueableDelivery).not_to receive(:set)
+          expect(FakeQueueableDelivery).to receive(:perform_async).with(mailing.id)
+          mailing.deliver_later!
+        end
+      end
+    end
   end
 
   context '#end_if_no_mailings' do

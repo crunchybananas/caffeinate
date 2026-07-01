@@ -122,16 +122,22 @@ module Caffeinate
     # When delay is provided, uses Sidekiq's perform_in to schedule delivery
     # after the specified number of seconds.
     #
+    # When `Caffeinate.config.async_delivery_queue_resolver` returns a queue name for this mailing
+    # and the delivery class responds to `.set` (Sidekiq/ActiveJob), the job is enqueued on that
+    # queue; otherwise it uses the delivery class's default queue.
+    #
     # @param delay_in_seconds [Integer, nil] seconds to wait before delivering (default: immediate)
     def deliver_later!(delay_in_seconds: nil)
       klass = ::Caffeinate.config.async_delivery_class
+      queue = ::Caffeinate.config.async_delivery_queue_for(self)
+      target = queue && klass.respond_to?(:set) ? klass.set(queue: queue) : klass
 
-      if delay_in_seconds.present? && delay_in_seconds.positive? && klass.respond_to?(:perform_in)
-        klass.perform_in(delay_in_seconds, id)
-      elsif klass.respond_to?(:perform_later)
-        klass.perform_later(id)
-      elsif klass.respond_to?(:perform_async)
-        klass.perform_async(id)
+      if delay_in_seconds.present? && delay_in_seconds.positive? && target.respond_to?(:perform_in)
+        target.perform_in(delay_in_seconds, id)
+      elsif target.respond_to?(:perform_later)
+        target.perform_later(id)
+      elsif target.respond_to?(:perform_async)
+        target.perform_async(id)
       else
         raise NoMethodError, "Neither perform_later, perform_async, or perform_in are defined on #{klass}."
       end

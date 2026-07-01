@@ -17,6 +17,17 @@ module Caffeinate
     # The background worker class for `async_delivery`.
     attr_accessor :async_delivery_class
 
+    # An optional callable (anything responding to `#call`, e.g. a lambda) used to route an
+    # individual `Caffeinate::Mailing` to a specific background queue when it is delivered
+    # asynchronously. It receives the mailing about to be enqueued and must return the name of
+    # the queue to use, or a blank value (`nil`/`""`) to fall back to `async_delivery_class`'s
+    # default queue. Only applied when the delivery class responds to `.set` (Sidekiq/ActiveJob).
+    #
+    # Default is nil (every mailing uses the delivery class's default queue).
+    #
+    #   config.async_delivery_queue_resolver = ->(mailing) { 'critical' if mailing.mailer_class == 'FooMailer' }
+    attr_accessor :async_delivery_queue_resolver
+
     # If true, uses `deliver_later` instead of `deliver`
     attr_accessor :deliver_later
 
@@ -51,6 +62,7 @@ module Caffeinate
       @default_ended_reason = nil
       @default_unsubscribe_reason = nil
       @enabled_drippers = nil
+      @async_delivery_queue_resolver = nil
     end
 
     def now=(val)
@@ -77,6 +89,16 @@ module Caffeinate
 
     def async_delivery_class
       @async_delivery_class.constantize
+    end
+
+    # Resolves the background queue for a given mailing using `async_delivery_queue_resolver`.
+    # Returns nil when no resolver is configured or the resolver returns a blank value, in which
+    # case the delivery class's default queue is used.
+    def async_delivery_queue_for(mailing)
+      return nil unless @async_delivery_queue_resolver.respond_to?(:call)
+
+      queue = @async_delivery_queue_resolver.call(mailing)
+      queue.presence
     end
   end
 end
